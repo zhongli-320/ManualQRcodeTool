@@ -11,6 +11,13 @@ class QRHelper {
         this.cellSize = 20;
         this.imageLoaded = false;
         
+        // 新增：坐标显示优化相关变量
+        this.lastDisplayedRow = null;
+        this.lastDisplayedCol = null;
+        this.highlightedRow = undefined;
+        this.highlightedCol = undefined;
+        this.mouseMoveRAF = null;
+        
         this.initializeEventListeners();
     }
 
@@ -41,8 +48,8 @@ class QRHelper {
             }
         });
 
-        // 鼠标悬停显示坐标
-        this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+        // 鼠标悬停显示坐标 - 使用节流优化性能
+        this.canvas.addEventListener('mousemove', this.throttle((e) => this.handleMouseMove(e), 16)); // 约60fps
         this.canvas.addEventListener('mouseleave', () => this.hideCoordinates());
 
         // 控制按钮
@@ -59,6 +66,20 @@ class QRHelper {
         });
 
         // 显示大小功能已移除，保持默认20px大小
+    }
+    
+    // 节流函数：限制函数执行频率
+    throttle(func, limit) {
+        let inThrottle;
+        return function() {
+            const args = arguments;
+            const context = this;
+            if (!inThrottle) {
+                func.apply(context, args);
+                inThrottle = true;
+                setTimeout(() => inThrottle = false, limit);
+            }
+        }
     }
 
     handleFileUpload(event) {
@@ -217,6 +238,27 @@ class QRHelper {
         if (this.isDrawing) {
             this.highlightCurrentRow();
         }
+        
+        // 绘制鼠标悬停高亮（如果有的话）
+        if (this.highlightedRow !== undefined && this.highlightedCol !== undefined) {
+            this.drawCellHighlight(this.highlightedRow, this.highlightedCol);
+        }
+    }
+    
+    drawCellHighlight(row, col) {
+        const cellWidth = this.canvas.width / this.qrSize;
+        const cellHeight = this.canvas.height / this.qrSize;
+        const x = col * cellWidth;
+        const y = row * cellHeight;
+        
+        // 绘制高亮边框
+        this.ctx.strokeStyle = '#FF5722';  // 橙色边框
+        this.ctx.lineWidth = 3;
+        this.ctx.strokeRect(x, y, cellWidth, cellHeight);
+        
+        // 填充半透明背景
+        this.ctx.fillStyle = 'rgba(255, 87, 34, 0.2)';
+        this.ctx.fillRect(x, y, cellWidth, cellHeight);
     }
 
     drawGrid() {
@@ -251,32 +293,100 @@ class QRHelper {
     handleMouseMove(event) {
         if (!this.imageLoaded) return;
 
-        const rect = this.canvas.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-        
-        const cellWidth = this.canvas.width / this.qrSize;
-        const cellHeight = this.canvas.height / this.qrSize;
-        
-        const col = Math.floor(x / cellWidth);
-        const row = Math.floor(y / cellHeight);
-        
-        if (col >= 0 && col < this.qrSize && row >= 0 && row < this.qrSize) {
-            this.showCoordinates(row + 1, col + 1);
-        } else {
-            this.hideCoordinates();
+        // 防抖处理：使用 requestAnimationFrame 优化性能
+        if (this.mouseMoveRAF) {
+            cancelAnimationFrame(this.mouseMoveRAF);
         }
+        
+        this.mouseMoveRAF = requestAnimationFrame(() => {
+            try {
+                // 获取canvas的精确边界，考虑CSS变换、边框等因素
+                const rect = this.canvas.getBoundingClientRect();
+                
+                // 计算相对于canvas内部的坐标，考虑设备像素比
+                const scaleX = this.canvas.width / rect.width;
+                const scaleY = this.canvas.height / rect.height;
+                
+                // 精确计算鼠标在canvas内部的坐标
+                const x = (event.clientX - rect.left) * scaleX;
+                const y = (event.clientY - rect.top) * scaleY;
+                
+                // 计算每个格子的大小
+                const cellWidth = this.canvas.width / this.qrSize;
+                const cellHeight = this.canvas.height / this.qrSize;
+                
+                // 使用更精确的边界检查，考虑浮点数精度
+                if (x >= 0 && x <= this.canvas.width && y >= 0 && y <= this.canvas.height) {
+                    // 计算行列号，确保从1开始计数
+                    let col = Math.floor(x / cellWidth);
+                    let row = Math.floor(y / cellHeight);
+                    
+                    // 边界保护：确保行列号在有效范围内
+                    col = Math.max(0, Math.min(col, this.qrSize - 1));
+                    row = Math.max(0, Math.min(row, this.qrSize - 1));
+                    
+                    // 显示坐标（行号和列号都从1开始）
+                    this.showCoordinates(row + 1, col + 1);
+                    
+                    // 高亮当前单元格（可选功能）
+                    this.highlightCell(row, col);
+                } else {
+                    this.hideCoordinates();
+                    this.clearCellHighlight();
+                }
+            } catch (error) {
+                console.warn('鼠标坐标计算出错:', error);
+                this.hideCoordinates();
+            }
+        });
     }
 
     showCoordinates(row, col) {
         const display = document.getElementById('coordinateDisplay');
-        document.getElementById('rowDisplay').textContent = row;
-        document.getElementById('colDisplay').textContent = col;
+        
+        // 只有当坐标真正改变时才更新DOM，减少不必要的重排重绘
+        if (this.lastDisplayedRow !== row || this.lastDisplayedCol !== col) {
+            document.getElementById('rowDisplay').textContent = row;
+            document.getElementById('colDisplay').textContent = col;
+            this.lastDisplayedRow = row;
+            this.lastDisplayedCol = col;
+        }
+        
         display.classList.remove('hidden');
     }
 
     hideCoordinates() {
-        document.getElementById('coordinateDisplay').classList.add('hidden');
+        const display = document.getElementById('coordinateDisplay');
+        display.classList.add('hidden');
+        
+        // 清除缓存的坐标值
+        this.lastDisplayedRow = null;
+        this.lastDisplayedCol = null;
+        
+        // 清除单元格高亮
+        this.clearCellHighlight();
+    }
+    
+    highlightCell(row, col) {
+        // 只有当单元格真正改变时才重新绘制
+        if (this.highlightedRow === row && this.highlightedCol === col) {
+            return;
+        }
+        
+        // 保存当前高亮的单元格位置
+        this.highlightedRow = row;
+        this.highlightedCol = col;
+        
+        // 重新绘制画布以显示新的高亮
+        this.redrawCanvas();
+    }
+    
+    clearCellHighlight() {
+        if (this.highlightedRow !== undefined || this.highlightedCol !== undefined) {
+            this.highlightedRow = undefined;
+            this.highlightedCol = undefined;
+            this.redrawCanvas();  // 重新绘制以清除高亮
+        }
     }
 
     updateCanvasStatus(message) {
