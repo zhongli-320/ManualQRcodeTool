@@ -58,16 +58,7 @@ class QRHelper {
             }
         });
 
-        // 显示大小调节
-        const cellSizeSlider = document.getElementById('cellSize');
-        const cellSizeValue = document.getElementById('cellSizeValue');
-        cellSizeSlider.addEventListener('input', (e) => {
-            this.cellSize = parseInt(e.target.value);
-            cellSizeValue.textContent = this.cellSize + 'px';
-            if (this.imageLoaded) {
-                this.redrawCanvas();
-            }
-        });
+        // 显示大小功能已移除，保持默认20px大小
     }
 
     handleFileUpload(event) {
