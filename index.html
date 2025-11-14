@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手绘二维码辅助工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(45deg, #2196F3, #21CBF3);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: flex;
+            min-height: 600px;
+        }
+
+        .left-panel {
+            flex: 1;
+            padding: 20px;
+            border-right: 1px solid #eee;
+        }
+
+        .right-panel {
+            flex: 1;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .upload-section {
+            margin-bottom: 20px;
+        }
+
+        .upload-area {
+            border: 2px dashed #2196F3;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            background: #f8f9ff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .upload-area:hover {
+            border-color: #1976D2;
+            background: #e3f2fd;
+        }
+
+        .upload-area.uploaded {
+            border-color: #4CAF50;
+            background: #e8f5e8;
+        }
+
+        .upload-area.dragover {
+            border-color: #1976D2;
+            background: #bbdefb;
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            color: #2196F3;
+            margin-bottom: 15px;
+        }
+
+        .controls {
+            margin: 20px 0;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .control-group select,
+        .control-group input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .control-group select:focus,
+        .control-group input:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+
+        .canvas-container {
+            position: relative;
+            margin: 20px 0;
+            text-align: center;
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        #qrcodeCanvas {
+            border: 2px solid #333;
+            border-radius: 5px;
+            max-width: 100%;
+            height: auto;
+        }
+
+        .coordinate-display {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 100;
+        }
+
+        .guide-section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .guide-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .guide-icon {
+            margin-right: 10px;
+            color: #2196F3;
+        }
+
+        .current-step {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+
+        .step-info {
+            font-size: 16px;
+            font-weight: bold;
+            color: #1976D2;
+            margin-bottom: 10px;
+        }
+
+        .step-details {
+            font-size: 14px;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+
+        .btn-primary {
+            background: #2196F3;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1976D2;
+        }
+
+        .btn-secondary {
+            background: #757575;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #616161;
+        }
+
+        .progress-bar {
+            background: #e0e0e0;
+            border-radius: 10px;
+            height: 8px;
+            margin: 15px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, #2196F3, #21CBF3);
+            height: 100%;
+            transition: width 0.3s ease;
+            border-radius: 10px;
+        }
+
+        .status-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .highlight-cell {
+            background: rgba(255, 193, 7, 0.5) !important;
+            border: 2px solid #FFC107 !important;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+            }
+            
+            .left-panel {
+                border-right: none;
+                border-bottom: 1px solid #eee;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 手绘二维码辅助工具</h1>
+            <p>上传二维码图片，获得精确的手绘指导</p>
+        </div>
+
+        <div class="main-content">
+            <div class="left-panel">
+                <div class="upload-section">
+                    <div class="upload-area" id="uploadArea">
+                        <div class="upload-icon">📱</div>
+                        <h3>点击或拖拽上传二维码图片</h3>
+                        <p>支持 JPG、PNG、GIF 格式</p>
+                        <input type="file" id="fileInput" accept="image/*" class="hidden">
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <div class="control-group">
+                        <label for="qrSize">二维码规格：</label>
+                        <select id="qrSize">
+                            <option value="21">21×21 (版本1)</option>
+                            <option value="25">25×25 (版本2)</option>
+                            <option value="29">29×29 (版本3)</option>
+                            <option value="33">33×33 (版本4)</option>
+                            <option value="37">37×37 (版本5)</option>
+                            <option value="41">41×41 (版本6)</option>
+                            <option value="45">45×45 (版本7)</option>
+                            <option value="49">49×49 (版本8)</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label for="cellSize">显示大小：</label>
+                        <input type="range" id="cellSize" min="10" max="30" value="20">
+                        <span id="cellSizeValue">20px</span>
+                    </div>
+                </div>
+
+                <div class="canvas-container">
+                        <div class="coordinate-display hidden" id="coordinateDisplay">
+                            行: <span id="rowDisplay">-</span>, 列: <span id="colDisplay">-</span>
+                        </div>
+                        <canvas id="qrcodeCanvas" width="400" height="400" style="display: block;"></canvas>
+                        <div id="canvasStatus" style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 5px; font-size: 14px; color: #666;">
+                            等待上传图片...
+                        </div>
+                    </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="guide-section">
+                    <div class="guide-title">
+                        <span class="guide-icon">🎯</span>
+                        手绘指导
+                    </div>
+
+                    <div class="current-step" id="currentStep">
+                        <div class="step-info">第 <span id="currentRow">1</span> 行手绘指导</div>
+                        <div class="step-details" id="stepDetails">
+                            请先上传二维码图片开始
+                        </div>
+                    </div>
+
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                    </div>
+                    <div class="status-info">
+                        <span>进度: <span id="progressText">0/0</span></span>
+                        <span>状态: <span id="statusText">等待开始</span></span>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button class="btn btn-primary" id="startBtn" disabled>开始手绘</button>
+                        <button class="btn btn-secondary" id="nextBtn" disabled>下一步</button>
+                        <button class="btn btn-secondary" id="resetBtn">重置</button>
+                    </div>
+                </div>
+
+                <div class="guide-section">
+                    <div class="guide-title">
+                        <span class="guide-icon">💡</span>
+                        使用说明
+                    </div>
+                    <div style="font-size: 14px; line-height: 1.6; color: #555;">
+                        <p><strong>操作步骤：</strong></p>
+                        <ol style="margin-left: 20px; margin-top: 10px;">
+                            <li>上传二维码图片</li>
+                            <li>选择合适的二维码规格</li>
+                            <li>点击"开始手绘"获取指导</li>
+                            <li>按步骤逐行手绘</li>
+                            <li>鼠标悬停查看坐标信息</li>
+                        </ol>
+                        <p style="margin-top: 15px;"><strong>提示：</strong></p>
+                        <ul style="margin-left: 20px; margin-top: 5px;">
+                            <li>黑色模块需要涂色</li>
+                            <li>白色模块保持空白</li>
+                            <li>按顺序逐行完成</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/qr-helper.js"></script>
+</body>
+</html>
